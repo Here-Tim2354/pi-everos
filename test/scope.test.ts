@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { projectIdFromCwd, sanitizeId } from "../src/scope.js";
@@ -33,5 +34,5 @@ test("超长截到 128 位", () => {
 });
 
 test("项目 id 取工作目录名", () => {
-  assert.equal(projectIdFromCwd("E:\\Learning\\Programming\\pi-everos"), "pi-everos");
+  assert.equal(projectIdFromCwd(join("Learning", "Programming", "pi-everos")), "pi-everos");
 });
