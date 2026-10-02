@@ -45,7 +45,7 @@ pi install git:github.com/Here-Tim2354/pi-everos
 
 | 信息 | 从哪来 | 例子 |
 | :--- | :--- | :--- |
-| 服务器地址 | 部署的人给你 | `https://your-server:8443` |
+| 服务器地址 | 部署的人给你 | IP地址 |
 | 令牌 | 部署时设的 | 一串十六进制 |
 | 证书文件 | 自签证书才需要 | 服务器上的 `certs/server.crt` |
 
