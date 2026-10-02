@@ -31,16 +31,13 @@ function searchTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined
   return defineTool({
     name: "memory_search",
     label: "查长期记忆",
-    description:
-      "在 EverOS 长期记忆里检索与 query 相关的历史片段：偏好、事实、决策、以前的结论。" +
-      "当前对话没提过、但以前聊过的内容，用这个查。",
-    promptSnippet: "检索长期记忆里的历史片段",
+    description: "检索长期记忆里与 query 相关的内容。当前对话没提到、但以前聊过的，用这个查。",
     parameters: Type.Object({
-      query: Type.String({ description: "一句话说清要查什么，别只写关键词" }),
+      query: Type.String({ description: "用一句完整的话说清要查什么" }),
       top_k: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, description: "返回条数，默认 5" })),
       method: Type.Optional(
         Type.Union([Type.Literal("keyword"), Type.Literal("vector"), Type.Literal("hybrid")], {
-          description: "检索方式，默认 hybrid（关键词加向量）",
+          description: "默认 hybrid，关键词和向量一起用",
         }),
       ),
     }),
@@ -62,12 +59,10 @@ function addTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): 
     name: "memory_add",
     label: "写入长期记忆",
     description:
-      "把值得跨会话保留的内容写进 EverOS：新的偏好、事实变更、决定、约定。" +
-      "日常对话每轮已经自动提交，只有需要明确记下、或要纠正旧说法时才调用。",
-    promptSnippet: "把值得保留的事实写进长期记忆",
+      "把值得跨会话保留的事实写进长期记忆。日常对话每轮已自动提交，只在要明确记下、或纠正旧说法时调用。",
     parameters: Type.Object({
       content: Type.String({
-        description: "一句完整的事实陈述，例如「Tim 决定部署只用 Docker，不引入别的依赖」",
+        description: "带主语和时态的事实陈述，例如「Tim 决定部署只用 Docker，不引入别的依赖」",
       }),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -75,7 +70,7 @@ function addTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): 
       const deps = requireDeps(resolve, ctx);
       await deps.remember(params.content);
       return {
-        content: [{ type: "text", text: "已提交给 EverOS，稍后由它提炼入库。" }],
+        content: [{ type: "text", text: "已提交，稍后由 EverOS 提炼入库。" }],
         details: { queued: true },
       };
     },

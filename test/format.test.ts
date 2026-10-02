@@ -40,10 +40,11 @@ test("超出预算时截到整行并留提示", () => {
   assert.match(text, /其余片段已省略/);
 });
 
-test("工具结果带上条目 id，方便后续引用", () => {
+test("工具结果只说命中了什么，不带用不上的内部 id", () => {
   const text = renderSearch(data);
   assert.match(text, /命中 1 条记忆/);
-  assert.match(text, /条目 id：tim_ep_1/);
+  assert.match(text, /测试习惯/);
+  assert.doesNotMatch(text, /tim_ep_1/);
 });
 
 test("工具没命中时说清楚没命中", () => {

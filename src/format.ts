@@ -1,5 +1,6 @@
 /**
- * 检索结果的两种渲染。召回片段进系统提示，要短；工具结果是给模型看的，带 id。
+ * 检索结果的两种渲染。召回片段进系统提示，要短；工具结果给模型看。
+ * 冲突规则只在召回段的抬头写一次，两处都写就成两个源了。
  */
 import type { MemoryItem, SearchData } from "./client.js";
 
@@ -20,7 +21,7 @@ export function renderRecall(data: SearchData, budget = RECALL_BUDGET): string {
     }
   }
 
-  const header = "记忆库里与当前话题相关的片段（可能过时；与当前对话冲突时以对话为准）：";
+  const header = "与当前话题相关的旧记忆（可能过时，冲突时以当前对话为准）：";
   return truncate(`${header}\n${lines.join("\n")}`, budget);
 }
 
@@ -37,9 +38,6 @@ export function renderSearch(data: SearchData): string {
     if (entry.facts.length > 0) {
       lines.push(`    事实：${entry.facts.join("；")}`);
     }
-    if (entry.id !== undefined) {
-      lines.push(`    条目 id：${entry.id}`);
-    }
     return lines.join("\n");
   });
 
@@ -51,7 +49,6 @@ interface Entry {
   title: string;
   body: string;
   facts: string[];
-  id: string | undefined;
 }
 
 function collect(data: SearchData): Entry[] {
@@ -69,7 +66,6 @@ function toEntry(item: MemoryItem): Entry {
       .map((fact) => condense(fact.content))
       .filter((fact) => fact !== "")
       .slice(0, 2),
-    id: item.id,
   };
 }
 
