@@ -79,6 +79,7 @@ pi install /path/to/pi-everos
 - 召回失败：会话开头重试，最多三次，之后本场不再试。
 - 提示只弹一次，其余写进 `~/.pi/agent/pi-everos.log`。
 - 服务连不上不影响 pi 的其他功能，扩展静默降级，对话照常。
+- 退出时如果缓冲区还有没提炼的内容，会等最多 10 秒把它催出来，状态栏有提示。没有待提炼的内容就立即退出。
 
 上下文被压缩之后，锚点可能已经不在上下文里。这时宁可跳过一轮不提交，也不重发，避免记忆里出现重复条目。
 
@@ -89,7 +90,7 @@ pi install /path/to/pi-everos
 | 记忆一直是空的 | `/memory-status` 看服务器是否连得上，再看日志里的提交记录 |
 | 提示证书错误 | 配置 `ca` 指向 `server.crt`，或临时用 `--everos-insecure` |
 | 记忆里出现重复 | 检查是不是同一台机器换了 `projectId`，或会话被 fork 过 |
-| 想把某个项目排除掉 | `--everos-commit=false` 或配置文件里设 `commit: false` |
+| 想把某个项目排除掉 | 在 `~/.pi/agent/pi-everos.json` 里设 `commit: false` |
 
 ## 开发
 

@@ -7,7 +7,7 @@ import type { MessageItem } from "./client.js";
 
 export interface Turn {
   entryId: string;
-  role: "user" | "assistant" | "tool";
+  role: "user" | "assistant";
   text: string;
   timestamp: number;
 }

@@ -32,6 +32,8 @@ const COMMIT_ENTRY = "pi-everos-commit";
 const RECALL_SECTION = "memory";
 const MAX_RECALL_ATTEMPTS = 3;
 const SHUTDOWN_GRACE_MS = 5_000;
+/** 提炼要跑一次模型，比普通请求慢得多。 */
+const FLUSH_GRACE_MS = 10_000;
 
 interface SessionState {
   config: Config;
@@ -46,6 +48,8 @@ interface SessionState {
   recallAttempts: number;
   /** 一场会话里只弹一次提示，日志照写。 */
   notified: boolean;
+  /** 服务端缓冲区里还有没提炼的消息。 */
+  dirty: boolean;
   /** 提交串成一条链，保证顺序，也方便退出前等它散完。 */
   pending: Promise<void>;
 }
@@ -89,7 +93,12 @@ export default function everosMemory(pi: ExtensionAPI): void {
     queue(state, async () => {
       if (state.client === undefined) throw new EverosError("还没连上 EverOS", "NOT_CONNECTED");
       const result = await state.client.add(scopeOf(state), sessionId(ctx), messages, ctx.signal);
-      log("info", `提交 ${messages.length} 条，缓冲区 ${result.message_count ?? "?"} 条`);
+      // 服务端边界命中时会自己提炼，这时缓冲区已经空了，退出前不必再催。
+      state.dirty = result.status !== "extracted";
+      log(
+        "info",
+        `提交 ${messages.length} 条，状态 ${result.status ?? "?"}，接受 ${result.message_count ?? "?"} 条`,
+      );
     });
 
   pi.on("session_start", async (_event, ctx) => {
@@ -103,6 +112,7 @@ export default function everosMemory(pi: ExtensionAPI): void {
       recall: undefined,
       recallAttempts: 0,
       notified: false,
+      dirty: false,
       pending: Promise.resolve(),
     };
     state.queued = state.committed;
@@ -172,9 +182,10 @@ export default function everosMemory(pi: ExtensionAPI): void {
     sessions.delete(id);
 
     await withTimeout(state.pending, SHUTDOWN_GRACE_MS);
-    if (state.client === undefined) return;
+    if (state.client === undefined || !state.dirty) return;
 
-    // 缓冲区里可能还剩最后一轮，催一次提炼。服务端要跑一次模型，等不回来就算了。
+    // 缓冲区还剩最后一轮，催一次提炼。服务端要跑一次模型，会等上一会儿。
+    if (ctx.hasUI) ctx.ui.setStatus("pi-everos", "正在把最后一轮对话提炼入库…");
     const done = await withTimeout(
       state.client
         .flush(scopeOf(state), id)
@@ -183,8 +194,9 @@ export default function everosMemory(pi: ExtensionAPI): void {
           log("warn", `退出前提炼失败：${describe(error)}`);
           return false;
         }),
-      SHUTDOWN_GRACE_MS,
+      FLUSH_GRACE_MS,
     );
+    if (ctx.hasUI) ctx.ui.setStatus("pi-everos", undefined);
     log("info", done === true ? "退出前已催提炼" : "退出前来不及催提炼，缓冲区留在服务端");
   });
 
@@ -302,11 +314,10 @@ interface WireMessage {
 function roleOf(role: unknown): Turn["role"] | undefined {
   if (role === "user") return "user";
   if (role === "assistant") return "assistant";
-  if (role === "toolResult") return "tool";
   return undefined;
 }
 
-/** 只取文字。思考过程、工具调用和带外的自定义消息都不进记忆。 */
+/** 只取文字。思考过程、工具调用、工具结果都不进记忆，而且工具行的形状服务端也不认。 */
 function messageText(message: WireMessage): string {
   const content = message.content;
   if (typeof content === "string") return content;
