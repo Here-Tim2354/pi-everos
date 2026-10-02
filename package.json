@@ -4,6 +4,14 @@
   "description": "EverOS long-term memory for the pi coding agent: session recall, incremental commit, and two model-callable tools.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Here-Tim2354/pi-everos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Here-Tim2354/pi-everos/issues"
+  },
+  "homepage": "https://github.com/Here-Tim2354/pi-everos#readme",
   "keywords": [
     "pi-package",
     "pi",
@@ -22,6 +30,7 @@
   "files": [
     "src",
     "skills",
+    "docs",
     "README.md",
     "LICENSE"
   ],

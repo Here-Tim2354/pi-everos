@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 用法和配置问题
+    url: https://github.com/Here-Tim2354/pi-everos/blob/main/README.md
+    about: README 里有连接方式、配置表、失败行为和排查表
+  - name: 安全漏洞
+    url: https://github.com/Here-Tim2354/pi-everos/security/advisories/new
+    about: 走私密渠道报告，不要开公开 issue

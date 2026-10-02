@@ -1,0 +1,70 @@
+name: 问题反馈
+description: 行为不对、报错、连不上
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        报之前先看两处：README 的「出问题的时候」一节，以及 `~/.pi/agent/pi-everos.log` 的最后几行。
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: 发生了什么
+      description: 期望的结果和实际的结果各写一句
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 怎么复现
+      description: 尽量给出能照着做的步骤
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: 相关日志
+      description: 贴 `~/.pi/agent/pi-everos.log` 里的相关行。贴之前确认没有令牌之类的敏感内容。
+      render: text
+
+  - type: input
+    id: pi
+    attributes:
+      label: pi 版本
+      description: 运行 `pi --version`
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node 版本
+      description: 运行 `node --version`
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: EverOS 部署方式
+      options:
+        - 官方云
+        - 自建，本地直连
+        - 自建，走网关，域名证书
+        - 自建，走网关，自签证书
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 运行模式
+      options:
+        - 交互模式
+        - 非交互模式（-p）
+        - rpc 或 json 模式
+    validations:
+      required: true
