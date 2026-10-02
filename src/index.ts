@@ -31,9 +31,20 @@ const COMMIT_ENTRY = "pi-everos-commit";
 /** 系统提示里的段落名，pi 会用它做标签。 */
 const RECALL_SECTION = "memory";
 const MAX_RECALL_ATTEMPTS = 3;
+/** 提交是本地到服务器的短请求，等这么久还没回来就是出问题了。 */
 const SHUTDOWN_GRACE_MS = 5_000;
-/** 提炼要跑一次模型，比普通请求慢得多。 */
-const FLUSH_GRACE_MS = 10_000;
+/**
+ * 提炼只等请求发出去，不等它返回。
+ * 服务端收到就会把提炼做完，客户端断开也不影响：本机 1.4.1 上验过，
+ * 连接 0.3 秒掰断，几十秒后 markdown 照样落盘。
+ * 所以退出不该卡在一次模型调用上。
+ */
+const FLUSH_DISPATCH_MS = 1_500;
+/** 召回挡在第一轮前面，不能按普通请求的二十秒等。官方的预算是五秒。 */
+const RECALL_TIMEOUT_MS = 5_000;
+/** 太短的第一句当不了查询，等用户说点实在的再召回。 */
+const MIN_QUERY_CHARS = 8;
+const QUERY_MAX_CHARS = 500;
 
 interface SessionState {
   config: Config;
@@ -130,12 +141,15 @@ export default function everosMemory(pi: ExtensionAPI): void {
     if (state?.client === undefined || !state.config.recall) return;
 
     if (state.recall === undefined && state.recallAttempts < MAX_RECALL_ATTEMPTS) {
+      const query = recallQuery(event.prompt);
+      if (query === undefined) return;
+
       state.recallAttempts += 1;
       try {
         const data = await state.client.search(
           scopeOf(state),
-          event.prompt,
-          { topK: state.config.topK },
+          query,
+          { topK: state.config.topK, timeoutMs: RECALL_TIMEOUT_MS },
           ctx.signal,
         );
         state.recall = renderRecall(data);
@@ -184,20 +198,14 @@ export default function everosMemory(pi: ExtensionAPI): void {
     await withTimeout(state.pending, SHUTDOWN_GRACE_MS);
     if (state.client === undefined || !state.dirty) return;
 
-    // 缓冲区还剩最后一轮，催一次提炼。服务端要跑一次模型，会等上一会儿。
-    if (ctx.hasUI) ctx.ui.setStatus("pi-everos", "正在把最后一轮对话提炼入库…");
-    const done = await withTimeout(
-      state.client
-        .flush(scopeOf(state), id)
-        .then(() => true)
-        .catch((error: unknown) => {
-          log("warn", `退出前提炼失败：${describe(error)}`);
-          return false;
-        }),
-      FLUSH_GRACE_MS,
+    // 只等请求发出去，不等返回：服务端收到就会把提炼做完，客户端断开也不影响。
+    await withTimeout(
+      state.client.flush(scopeOf(state), id).catch((error: unknown) => {
+        log("warn", `退出前提炼失败：${describe(error)}`);
+      }),
+      FLUSH_DISPATCH_MS,
     );
-    if (ctx.hasUI) ctx.ui.setStatus("pi-everos", undefined);
-    log("info", done === true ? "退出前已催提炼" : "退出前来不及催提炼，缓冲区留在服务端");
+    log("info", "退出前已把提炼请求发出去");
   });
 
   for (const tool of createTools((ctx) => {
@@ -269,6 +277,13 @@ export default function everosMemory(pi: ExtensionAPI): void {
       ctx.ui.notify(lines.join("\n"), "info");
     },
   });
+}
+
+/** 第一句话就是召回词。太短的（「继续」「ok」）问不出东西，留给下一轮。 */
+function recallQuery(prompt: string): string | undefined {
+  const text = prompt.replace(/\s+/g, " ").trim();
+  if (text.length < MIN_QUERY_CHARS) return undefined;
+  return text.slice(0, QUERY_MAX_CHARS);
 }
 
 function sessionId(ctx: ExtensionContext): string {

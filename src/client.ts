@@ -77,7 +77,7 @@ export class EverosClient {
   }
 
   health(signal?: AbortSignal): Promise<HealthData> {
-    return this.#request<HealthData>("/health", undefined, signal);
+    return this.#request<HealthData>("/health", undefined, undefined, signal);
   }
 
   /** 同一 (session_id, app_id, project_id) 的消息会攒成一批，攒够了 EverOS 自己提炼。 */
@@ -95,6 +95,7 @@ export class EverosClient {
         project_id: scope.projectId,
         messages,
       },
+      undefined,
       signal,
     );
   }
@@ -104,6 +105,7 @@ export class EverosClient {
     return this.#request<FlushResult>(
       "/api/v2/memory/flush",
       { session_id: sessionId, app_id: scope.appId, project_id: scope.projectId },
+      undefined,
       signal,
     );
   }
@@ -111,7 +113,11 @@ export class EverosClient {
   search(
     scope: Scope,
     query: string,
-    options: { topK: number; method?: "keyword" | "vector" | "hybrid" | "agentic" | undefined },
+    options: {
+      topK: number;
+      method?: "keyword" | "vector" | "hybrid" | "agentic" | undefined;
+      timeoutMs?: number | undefined;
+    },
     signal?: AbortSignal,
   ): Promise<SearchData> {
     return this.#request<SearchData>(
@@ -124,17 +130,18 @@ export class EverosClient {
         method: options.method ?? "hybrid",
         top_k: options.topK,
       },
+      options.timeoutMs,
       signal,
     );
   }
 
-  #request<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  #request<T>(path: string, body: unknown, timeoutMs?: number, signal?: AbortSignal): Promise<T> {
     const url = new URL(path, this.#config.baseUrl);
     const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body), "utf8");
     const options: RequestOptions = {
       method: payload === undefined ? "GET" : "POST",
       headers: this.#headers(payload),
-      timeout: this.#config.timeoutMs,
+      timeout: timeoutMs ?? this.#config.timeoutMs,
     };
 
     if (url.protocol === "https:") {
@@ -168,7 +175,9 @@ export class EverosClient {
       });
 
       request.on("timeout", () => {
-        request.destroy(new EverosError(`请求超时（${this.#config.timeoutMs} 毫秒）`, "TIMEOUT"));
+        request.destroy(
+          new EverosError(`请求超时（${options.timeout ?? this.#config.timeoutMs} 毫秒）`, "TIMEOUT"),
+        );
       });
       request.on("error", (error: Error) => {
         reject(error instanceof EverosError ? error : new EverosError(describeNetwork(error), "NETWORK"));
