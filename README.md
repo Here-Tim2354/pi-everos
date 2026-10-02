@@ -156,9 +156,7 @@ skills/
 
 ## 参与贡献
 
-欢迎提 issue 和 PR。动手前先读 [CONTRIBUTING.md](CONTRIBUTING.md)，里面写了代码规范、提交信息格式，以及几条会被拒绝的改法。
-
-安全相关的报告请走 [SECURITY.md](SECURITY.md) 里的渠道，不要开公开 issue。
+欢迎提 issue 和 PR。先读 [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 许可
 
