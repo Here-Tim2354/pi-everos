@@ -36,7 +36,7 @@
 
 ## 执行
 
-遇到辱骂、骚扰或其他不可接受的行为，可以向负责执行的维护者报告：<197018208+Here-Tim2354@users.noreply.github.com>，或在 GitHub 上私信 [@Here-Tim2354](https://github.com/Here-Tim2354)。
+遇到辱骂、骚扰或其他不可接受的行为，请在 GitHub 上私信维护者 [@Here-Tim2354](https://github.com/Here-Tim2354) 报告。
 
 所有投诉都会被及时、公平地审查和调查。维护者有义务尊重报告者的隐私和安全。
 
