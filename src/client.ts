@@ -4,6 +4,7 @@
  *   POST /api/v2/memory/add     消息进缓冲区
  *   POST /api/v2/memory/flush   立刻提炼这个会话的缓冲区
  *   POST /api/v2/memory/search  检索
+ *   POST /api/v2/memory/get     分页列举，不做排序打分
  * 用 node:http(s) 而不是 fetch，因为自签证书得传自定义 CA。
  */
 import { readFileSync } from "node:fs";
@@ -33,6 +34,7 @@ export interface AtomicFact {
   score?: number;
 }
 
+/** 对话提炼出的条目。search 和 get 返回的形状一样，只是 get 没有 score。 */
 export interface MemoryItem {
   id?: string;
   subject?: string;
@@ -43,11 +45,45 @@ export interface MemoryItem {
   atomic_facts?: AtomicFact[];
 }
 
+/** 用户画像。只有一个，整个覆盖式重写，所以没有 timestamp。 */
+export interface ProfileItem {
+  id?: string;
+  user_id?: string;
+  score?: number;
+  profile_data?: ProfileData;
+}
+
+export interface ProfileData {
+  summary?: string;
+  explicit_info?: ProfileEntry[];
+  implicit_traits?: ProfileEntry[];
+}
+
+/** 画像条目。explicit_info 用 category，implicit_traits 用 trait，其余字段同名。 */
+export interface ProfileEntry {
+  category?: string;
+  trait?: string;
+  description?: string;
+  evidence?: string;
+  basis?: string;
+}
+
 export interface SearchData {
   episodes?: MemoryItem[];
-  profiles?: MemoryItem[];
+  profiles?: ProfileItem[];
   agent_cases?: MemoryItem[];
   agent_skills?: MemoryItem[];
+}
+
+/** /get 能列的四类。user 名下是 episode / profile。 */
+export type MemoryType = "episode" | "profile";
+
+export interface GetData {
+  episodes?: MemoryItem[];
+  profiles?: ProfileItem[];
+  /** 满足条件的总条数，不是本页条数。 */
+  total_count?: number;
+  count?: number;
 }
 
 export interface AddResult {
@@ -116,6 +152,8 @@ export class EverosClient {
     options: {
       topK: number;
       method?: "keyword" | "vector" | "hybrid" | "agentic" | undefined;
+      /** 带上用户画像。画像不参与排序，命中与否都会返回。 */
+      includeProfile?: boolean | undefined;
       timeoutMs?: number | undefined;
     },
     signal?: AbortSignal,
@@ -129,8 +167,32 @@ export class EverosClient {
         query,
         method: options.method ?? "hybrid",
         top_k: options.topK,
+        include_profile: options.includeProfile === true,
       },
       options.timeoutMs,
+      signal,
+    );
+  }
+
+  /** 列举，不检索。看记忆里到底存了什么，用这个。 */
+  get(
+    scope: Scope,
+    options: { memoryType: MemoryType; page?: number | undefined; pageSize?: number | undefined },
+    signal?: AbortSignal,
+  ): Promise<GetData> {
+    return this.#request<GetData>(
+      "/api/v2/memory/get",
+      {
+        user_id: scope.userId,
+        app_id: scope.appId,
+        project_id: scope.projectId,
+        memory_type: options.memoryType,
+        page: options.page ?? 1,
+        page_size: options.pageSize ?? 20,
+        sort_by: "timestamp",
+        sort_order: "desc",
+      },
+      undefined,
       signal,
     );
   }

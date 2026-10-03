@@ -1,16 +1,17 @@
 /**
- * 两个工具：主动查、主动记。自动召回加自动提交已经覆盖大部分场景，
- * 这两个留给模型补刀：查当前对话没提过的事，和纠正已经过时的说法。
+ * 三个工具：主动查、主动记、摊开看。自动召回加自动提交已经覆盖大部分场景，
+ * 前两个留给模型补刀：查当前对话没提过的事，和纠正已经过时的说法。
+ * 第三个是审计口：写了什么能看全，不用猜查询词。
  */
 import { defineTool, type ExtensionToolContext, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { type TSchema, Type } from "typebox";
 
-import type { SearchData } from "./client.js";
-import { renderSearch } from "./format.js";
+import type { GetData, MemoryType, SearchData } from "./client.js";
+import { renderList, renderSearch } from "./format.js";
 
 export type SearchMethod = "keyword" | "vector" | "hybrid";
 
-/** 查一次记忆，或提交一条要记住的内容。连不上时返回 undefined，由工具报错给模型。 */
+/** 查、记、列举。连不上时 resolve 返回 undefined，由工具报错给模型。 */
 export interface ToolDeps {
   search(
     query: string,
@@ -19,12 +20,13 @@ export interface ToolDeps {
     signal?: AbortSignal,
   ): Promise<SearchData>;
   remember(content: string): Promise<void>;
+  list(memoryType: MemoryType, page: number, pageSize: number, signal?: AbortSignal): Promise<GetData>;
 }
 
 type AnyTool = ToolDefinition<TSchema, unknown, unknown>;
 
 export function createTools(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): AnyTool[] {
-  return [searchTool(resolve), addTool(resolve)];
+  return [searchTool(resolve), addTool(resolve), listTool(resolve)];
 }
 
 function searchTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): AnyTool {
@@ -59,7 +61,7 @@ function addTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): 
     name: "memory_add",
     label: "写入长期记忆",
     description:
-      "把值得跨会话保留的事实写进长期记忆。日常对话每轮已自动提交，只在要明确记下、或纠正旧说法时调用。",
+      "把值得跨会话保留的事实写进长期记忆。日常对话每轮已自动提交，只在要明确记下、或纠正过时说法时调用。记忆只能追加，纠正靠再写一条明确陈述。",
     parameters: Type.Object({
       content: Type.String({
         description: "带主语和时态的事实陈述，例如「Tim 决定部署只用 Docker，不引入别的依赖」",
@@ -72,6 +74,33 @@ function addTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): 
       return {
         content: [{ type: "text", text: "已提交，稍后由 EverOS 提炼入库。" }],
         details: { queued: true },
+      };
+    },
+  });
+}
+
+function listTool(resolve: (ctx: ExtensionToolContext) => ToolDeps | undefined): AnyTool {
+  return defineTool({
+    name: "memory_list",
+    label: "浏览长期记忆",
+    description:
+      "按时间倒序列出长期记忆的条目，不做语义检索。用户问「你记得什么」、要核对记忆里存了什么、或怀疑检索漏了的时候用这个。",
+    parameters: Type.Object({
+      memory_type: Type.Union([Type.Literal("episode"), Type.Literal("profile")], {
+        description: "episode 是对话提炼的条目，profile 是用户画像（只有一个）",
+      }),
+      page: Type.Optional(Type.Integer({ minimum: 1, description: "页码，默认 1" })),
+      page_size: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, description: "每页条数，默认 10" })),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    execute: async (_callId, params, signal, _onUpdate, ctx) => {
+      const deps = requireDeps(resolve, ctx);
+      const data = await deps.list(params.memory_type, params.page ?? 1, params.page_size ?? 10, signal);
+      const count =
+        params.memory_type === "profile" ? (data.profiles?.length ?? 0) : (data.episodes?.length ?? 0);
+      return {
+        content: [{ type: "text", text: renderList(data, params.memory_type) }],
+        details: { count },
       };
     },
   });

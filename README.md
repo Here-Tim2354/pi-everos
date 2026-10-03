@@ -12,7 +12,7 @@
 [![pi](https://img.shields.io/badge/pi-extension-2563eb?style=flat-square)](https://github.com/earendil-works/pi)
 [![EverOS](https://img.shields.io/badge/memory-EverOS-7c3aed?style=flat-square)](https://everos.evermind.ai)
 
-<img src="https://raw.githubusercontent.com/Here-Tim2354/pi-everos/main/docs/architecture.png" alt="pi 接入 EverOS：四个挂点、两个工具、一个访问网关" width="880">
+<img src="https://raw.githubusercontent.com/Here-Tim2354/pi-everos/main/docs/architecture.png" alt="pi 接入 EverOS：四个挂点、三个工具、一个访问网关" width="880">
 
 <sub>把 EverOS 当一个整体看，只关心接缝。它内部怎么分层、怎么写盘、怎么建索引，与本扩展无关。</sub>
 
@@ -24,10 +24,12 @@
 
 | 时机 | 行为 |
 | :--- | :--- |
-| 会话开头 | 拿你的第一句话检索一次，把命中的片段注入系统提示 |
+| 会话开头 | 拿你的第一句话检索一次，把命中的片段和用户画像注入系统提示 |
 | 每一轮结束 | 把上一轮之后新增的对话提交给 EverOS |
 | 会话结束 | 等提交落地，必要时催一次提炼 |
-| 随时 | 提供 `memory_search`（主动查）和 `memory_add`（主动记）两个工具 |
+| 随时 | 提供 `memory_search`（主动查）、`memory_add`（主动记）、`memory_list`（摊开看）三个工具 |
+
+具体到每个时机调哪个接口，见 [读写时机](docs/read-write-timing.md)。
 
 提炼时机由 EverOS 自己判断：`/add` 只是把消息放进缓冲区，边界探测器觉得这段对话告一段落了才跑模型。pi 这边不做取舍，也不为每轮对话付一次模型钱。
 
@@ -51,10 +53,12 @@ pi install git:github.com/Here-Tim2354/pi-everos
 
 在 pi 里运行 <kbd>/memory-setup</kbd>，按提示填。它会先请求一次健康检查，通了才写配置，配置文件落在 `~/.pi/agent/pi-everos.json`，权限 0600。
 
-状态随时可查：
+状态随时可查，存了什么也能直接看：
 
 ```
 /memory-status
+/memory-list          # 最近 10 条
+/memory-list profile  # 用户画像
 ```
 
 <sub>走 EverOS 官方云只需要一个 API Key。本地直连 `http://127.0.0.1:8000` 的 EverOS 不需要令牌。</sub>
@@ -142,11 +146,11 @@ npx tsx scripts/smoke.ts
 
 ```text
 src/
-  index.ts    四个挂点、两个命令、接线
+  index.ts    四个挂点、三个命令、接线
   client.ts   HTTP 客户端
   config.ts   配置四层覆盖
   delta.ts    增量切片
-  tools.ts    两个工具
+  tools.ts    三个工具
   format.ts   检索结果渲染
   scope.ts    作用域 id 清洗
   log.ts      日志

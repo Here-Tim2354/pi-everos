@@ -4,7 +4,7 @@
  *   before_agent_start  首次提问时召回一次并冻结，之后每轮注入同一段
  *   turn_end            提交本轮新增的对话
  *   session_shutdown    等提交落地，再催一次提炼
- * 自动流程之外还有两个命令和两个工具。
+ * 自动流程之外还有三个命令和三个工具。
  */
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 
@@ -20,7 +20,7 @@ import {
   writeStoredConfig,
 } from "./config.js";
 import { deltaAfter, type Turn, toMessageItems } from "./delta.js";
-import { renderRecall } from "./format.js";
+import { renderList, renderRecall } from "./format.js";
 import { LOG_FILE, log } from "./log.js";
 import type { Scope } from "./scope.js";
 import { createTools } from "./tools.js";
@@ -149,7 +149,7 @@ export default function everosMemory(pi: ExtensionAPI): void {
         const data = await state.client.search(
           scopeOf(state),
           query,
-          { topK: state.config.topK, timeoutMs: RECALL_TIMEOUT_MS },
+          { topK: state.config.topK, includeProfile: true, timeoutMs: RECALL_TIMEOUT_MS },
           ctx.signal,
         );
         state.recall = renderRecall(data);
@@ -216,6 +216,8 @@ export default function everosMemory(pi: ExtensionAPI): void {
       search: (query, topK, method, signal) => client.search(scopeOf(state), query, { topK, method }, signal),
       remember: (content) =>
         post(state, ctx, [{ sender_id: state.config.userId, role: "user", timestamp: Date.now(), content }]),
+      list: (memoryType, page, pageSize, signal) =>
+        client.get(scopeOf(state), { memoryType, page, pageSize }, signal),
     };
   })) {
     pi.registerTool(tool);
@@ -252,6 +254,31 @@ export default function everosMemory(pi: ExtensionAPI): void {
         log("info", `配置已写入 ${CONFIG_FILE}，版本 ${health.version ?? "?"}`);
       } catch (error) {
         ctx.ui.notify(`连不上：${describe(error)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("memory-list", {
+    description: "浏览长期记忆里存了什么，参数可填 episode（默认）或 profile",
+    getArgumentCompletions: (prefix) =>
+      [
+        { value: "episode", label: "episode", description: "对话提炼出的条目，按时间倒序" },
+        { value: "profile", label: "profile", description: "用户画像，只有一个" },
+      ].filter((item) => item.value.startsWith(prefix)),
+    handler: async (args, ctx) => {
+      const config = loadConfig(ctx.cwd, overrides());
+      const problem = configProblem(config);
+      if (problem !== undefined) {
+        ctx.ui.notify(`${problem}。运行 /memory-setup 连接 EverOS。`, "error");
+        return;
+      }
+
+      const memoryType = args.trim() === "profile" ? "profile" : "episode";
+      try {
+        const data = await new EverosClient(config).get(config, { memoryType, page: 1, pageSize: 10 });
+        ctx.ui.notify(renderList(data, memoryType), "info");
+      } catch (error) {
+        ctx.ui.notify(`列举失败：${describe(error)}`, "error");
       }
     },
   });

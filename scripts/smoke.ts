@@ -1,5 +1,5 @@
 /**
- * 连真实服务器跑一遍：健康检查 → 提交 → 提炼 → 检索。
+ * 连真实服务器跑一遍：健康检查 → 提交 → 提炼 → 检索 → 列举。
  *
  * 用法（自签证书要给 ca）：
  *   EVEROS_BASE_URL=https://your-server:8443 \
@@ -50,6 +50,15 @@ console.log(`检索命中 ${count(found.episodes)} 条 episode、${count(found.p
 for (const episode of found.episodes ?? []) {
   console.log(`- ${episode.subject ?? "(无标题)"}`);
 }
+
+const withProfile = await client.search(scope, "用户画像", { topK: 1, includeProfile: true });
+console.log(`带画像检索：${withProfile.profiles?.[0]?.profile_data?.summary ?? "（还没有画像）"}`);
+
+const episodes = await client.get(scope, { memoryType: "episode", pageSize: 5 });
+console.log(`列举 episode：共 ${episodes.total_count ?? "?"} 条，本页 ${count(episodes.episodes)} 条`);
+
+const profile = await client.get(scope, { memoryType: "profile" });
+console.log(`列举画像：${count(profile.profiles)} 条`);
 
 function count(items: MemoryItem[] | undefined): number {
   return items?.length ?? 0;
